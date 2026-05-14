@@ -1,0 +1,40 @@
+# SmallCNN on MNIST — classification baseline
+experiment: mnist_cnn
+dataset: mnist
+model: small_cnn
+epochs: 5
+batch_size: 128
+seeds: [42, 43, 44]
+
+# Convergence threshold: we measure how many epochs to reach 97% test accuracy
+threshold:
+  metric: test_acc
+  value: 0.97
+
+# Each optimizer gets a grid of learning rates to try.
+# The sweep runner takes the cartesian product: optimizer × lr × seed
+optimizers:
+  - name: sgd
+    grid:
+      lr: [0.01, 0.03, 0.1]
+  - name: sgd_momentum
+    grid:
+      lr: [0.01, 0.03]
+      momentum: [0.9]
+  - name: nesterov
+    grid:
+      lr: [0.01, 0.03]
+      momentum: [0.9]
+  - name: adagrad
+    grid:
+      lr: [0.01, 0.03]
+  - name: rmsprop
+    grid:
+      lr: [0.001, 0.003]
+  - name: adam
+    grid:
+      lr: [0.0003, 0.001]
+  - name: adamw
+    grid:
+      lr: [0.0003, 0.001]
+      weight_decay: [0.01]

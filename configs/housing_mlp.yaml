@@ -1,0 +1,37 @@
+# DeepMLP on California Housing — regression task
+experiment: housing_mlp
+dataset: california
+model: deep_mlp
+epochs: 20
+batch_size: 64
+seeds: [42, 43, 44]
+
+threshold:
+  metric: test_mse
+  value: 0.35
+
+optimizers:
+  - name: sgd
+    grid:
+      lr: [0.001, 0.005, 0.01]
+  - name: sgd_momentum
+    grid:
+      lr: [0.001, 0.005]
+      momentum: [0.9]
+  - name: nesterov
+    grid:
+      lr: [0.001, 0.005]
+      momentum: [0.9]
+  - name: adagrad
+    grid:
+      lr: [0.005, 0.01]
+  - name: rmsprop
+    grid:
+      lr: [0.001, 0.003]
+  - name: adam
+    grid:
+      lr: [0.0003, 0.001]
+  - name: adamw
+    grid:
+      lr: [0.0003, 0.001]
+      weight_decay: [0.01]
