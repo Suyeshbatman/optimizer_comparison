@@ -178,7 +178,7 @@ def _section_loss_curves(results, experiment_dir):
     ax2.grid(True, alpha=0.3)
 
     fig.tight_layout()
-    st.pyplot(fig)
+    st.pyplot(fig, use_container_width=True)
     plt.close(fig)
 
 
@@ -202,7 +202,7 @@ def _section_memory(results):
         ax1.set_xlabel("State Size (KB)")
         ax1.set_title("Optimizer State Overhead")
         fig1.tight_layout()
-        st.pyplot(fig1)
+        st.pyplot(fig1, use_container_width=True)
         plt.close(fig1)
 
     with col2:
@@ -219,7 +219,7 @@ def _section_memory(results):
         ax2.set_xlabel("Peak GPU (MB)")
         ax2.set_title("Peak GPU Memory")
         fig2.tight_layout()
-        st.pyplot(fig2)
+        st.pyplot(fig2, use_container_width=True)
         plt.close(fig2)
 
 
@@ -239,7 +239,7 @@ def _section_timing(results):
     ax.set_xlabel("Avg Total Time (seconds)")
     ax.set_title("Training Time by Optimizer")
     fig.tight_layout()
-    st.pyplot(fig)
+    st.pyplot(fig, use_container_width=True)
     plt.close(fig)
 
 
@@ -286,7 +286,7 @@ def _section_convergence(results):
     ax.set_title("Convergence Speed (best LR per optimizer)")
     ax.set_xlim(0, max_s * 1.6)
     fig.tight_layout()
-    st.pyplot(fig)
+    st.pyplot(fig, use_container_width=True)
     plt.close(fig)
 
 
@@ -332,7 +332,7 @@ def _section_stability(results):
         ax1.set_xlabel("Std Dev of Best Metric")
         ax1.set_title("Metric Consistency")
         fig1.tight_layout()
-        st.pyplot(fig1)
+        st.pyplot(fig1, use_container_width=True)
         plt.close(fig1)
 
     with col2:
@@ -352,7 +352,7 @@ def _section_stability(results):
         ax2.set_xlabel("Std Dev of Final Grad Norm")
         ax2.set_title("Training Stability")
         fig2.tight_layout()
-        st.pyplot(fig2)
+        st.pyplot(fig2, use_container_width=True)
         plt.close(fig2)
 
 
@@ -448,7 +448,7 @@ def _section_precision_recall_f1(results, experiment_dir):
             ax.set_title("Macro F1 by Optimizer")
             ax.set_xlim(0, min(1.0, f1_avg.max() * 1.15))
             fig.tight_layout()
-            st.pyplot(fig)
+            st.pyplot(fig, use_container_width=True)
             plt.close(fig)
 
     # Per-class breakdown and confusion matrix for a selected run
@@ -484,7 +484,7 @@ def _section_precision_recall_f1(results, experiment_dir):
         ax.set_xticklabels(class_labels, fontsize=8)
         ax.set_yticklabels(class_labels, fontsize=8)
         fig.tight_layout()
-        st.pyplot(fig)
+        st.pyplot(fig, use_container_width=True)
         plt.close(fig)
 
 
@@ -532,7 +532,7 @@ def _section_regression_error(results, experiment_dir):
         ax.set_xlabel("Mean Absolute Error")
         ax.set_title("MAE by Optimizer")
         fig.tight_layout()
-        st.pyplot(fig)
+        st.pyplot(fig, use_container_width=True)
         plt.close(fig)
 
 
@@ -635,7 +635,7 @@ def _section_bias_variance(results, experiment_dir):
         ax.set_title("Bias vs Variance by Optimizer")
         ax.grid(True, alpha=0.3)
         fig.tight_layout()
-        st.pyplot(fig)
+        st.pyplot(fig, use_container_width=True)
         plt.close(fig)
 
         st.caption(

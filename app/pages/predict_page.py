@@ -74,7 +74,7 @@ HOUSING_STDS  = np.array([1.8998, 12.5856, 2.4742, 0.4739, 1132.4622, 10.3860, 2
 def _find_trained_models() -> dict:
     """Scan runs/*/models/*.pt and return enriched model info.
 
-    Returns: {display_name: {"path", "metric", "task", "optimizer", "lr", "seed", "experiment"}}
+    Returns: {display_name: {"path", "metric", "task", "optimizer", "lr", "seed", "epochs", "experiment", "trained_at"}}
     """
     all_optimizers = ["sgd_momentum", "nesterov", "adagrad", "rmsprop", "adam", "adamw", "sgd"]
     raw_models = []
@@ -97,6 +97,9 @@ def _find_trained_models() -> dict:
         opt = summary.get("optimizer", "")
         lr = summary.get("lr", 0.0)
         seed = summary.get("seed", 0)
+        ep = summary.get("epochs", ckpt.get("epochs", 0))
+
+        trained_at = _parse_timestamp_from_filename(filename)
 
         if not opt:
             for o in all_optimizers:
@@ -110,23 +113,26 @@ def _find_trained_models() -> dict:
             "optimizer": opt,
             "lr": lr,
             "seed": seed,
+            "epochs": ep,
             "metric": metric,
             "task": task,
+            "trained_at": trained_at,
         })
 
-    best_by_group = {}
+    best_by_experiment = {}
     for m in raw_models:
-        key = (m["experiment"], m["optimizer"])
-        if key not in best_by_group or m["metric"] > best_by_group[key]:
-            best_by_group[key] = m["metric"]
+        exp = m["experiment"]
+        if exp not in best_by_experiment or m["metric"] > best_by_experiment[exp]:
+            best_by_experiment[exp] = m["metric"]
 
     models = {}
     for m in raw_models:
-        key = (m["experiment"], m["optimizer"])
         metric_label = "Acc" if m["task"] == "classification" else "R²"
-        is_best = (m["metric"] == best_by_group.get(key, None))
-        prefix = "⭐ Best: " if is_best else ""
-        display = f"{prefix}{m['optimizer']} (lr={m['lr']}, seed={m['seed']}) — {metric_label}: {m['metric']:.4f}"
+        is_best = (m["metric"] == best_by_experiment.get(m["experiment"], None))
+        prefix = "🏆 " if is_best else ""
+        ep_str = f", {m['epochs']}ep" if m["epochs"] else ""
+        ts_str = f" [{m['trained_at']}]" if m["trained_at"] != "No timestamp" else ""
+        display = f"{prefix}{m['optimizer']} | lr={m['lr']} | seed={m['seed']}{ep_str} | {metric_label}: {m['metric']:.4f}{ts_str}"
         display_key = f"{m['experiment']} / {display}"
         models[display_key] = m
 
@@ -877,9 +883,11 @@ def render():
             model_save_dir = os.path.join("runs", ds_info["experiment"], "models")
             os.makedirs(model_save_dir, exist_ok=True)
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            model_path = os.path.join(
-                model_save_dir, f"{selected_optimizer}_lr{retrain_lr}_seed{retrain_seed}_{timestamp}.pt"
-            )
+            task = meta["task"]
+            metric_tag = "acc" if task == "classification" else "r2"
+            metric_val = best_metric
+            model_fname = f"{selected_optimizer}_lr{retrain_lr}_seed{retrain_seed}_ep{retrain_epochs}_{metric_tag}{metric_val:.4f}_{timestamp}.pt"
+            model_path = os.path.join(model_save_dir, model_fname)
             torch.save({
                 "model_state_dict": model.state_dict(),
                 "model_name": ds_info["model"],
@@ -887,6 +895,7 @@ def render():
                 "optimizer": selected_optimizer,
                 "lr": retrain_lr,
                 "seed": retrain_seed,
+                "epochs": retrain_epochs,
                 "meta": meta,
                 "summary": summary,
             }, model_path)

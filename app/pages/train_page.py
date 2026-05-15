@@ -494,15 +494,27 @@ def render():
 
     # ── Training config ──────────────────────────────────────────
     st.subheader("2. Training Configuration")
-    col1, col2, col3 = st.columns(3)
+    col1, col2 = st.columns(2)
     with col1:
         epochs = st.number_input("Epochs", min_value=1, max_value=100,
                                  value=preset["default_epochs"])
     with col2:
         batch_size = st.number_input("Batch size", min_value=16, max_value=512,
                                      value=preset["default_batch_size"], step=16)
-    with col3:
-        seed = st.number_input("Random seed", min_value=0, max_value=9999, value=42)
+
+    seeds_str = st.text_input(
+        "Random seeds (comma-separated)",
+        value="42, 43, 44",
+        help="Train each optimizer+lr combo with every seed. More seeds = better stability analysis on the Compare page.",
+    )
+    try:
+        seeds = [int(s.strip()) for s in seeds_str.split(",") if s.strip()]
+    except ValueError:
+        st.error("Seeds must be integers separated by commas.")
+        return
+    if not seeds:
+        st.error("Enter at least one seed.")
+        return
 
     run_mode = st.radio(
         "Run mode",
@@ -551,8 +563,8 @@ def render():
                 st.error(f"Invalid learning rates for {opt_name}")
                 return
 
-    total_runs = sum(len(lrs) for lrs in opt_lr_map.values())
-    st.markdown(f"**Total runs: {total_runs}**")
+    total_runs = sum(len(lrs) for lrs in opt_lr_map.values()) * len(seeds)
+    st.markdown(f"**Total runs: {total_runs}** ({len(seeds)} seed{'s' if len(seeds) > 1 else ''} x {total_runs // len(seeds)} optimizer/lr combos)")
 
     # ── Learning rate scheduler ─────────────────────────────────
     st.subheader("5. Learning Rate Scheduler (optional)")
@@ -665,92 +677,96 @@ def render():
     run_idx = 0
     for opt_name in selected_opts:
         for lr in opt_lr_map[opt_name]:
-            # Check stop flag between runs
-            if st.session_state.get("stop_training", False):
-                st.warning("⏹️ Sweep stopped by user.")
-                break
+            for seed in seeds:
+                if st.session_state.get("stop_training", False):
+                    st.warning("⏹️ Sweep stopped by user.")
+                    break
 
-            run_idx += 1
-            run_key = f"{opt_name} (lr={lr})"
+                run_idx += 1
+                run_key = f"{opt_name} (lr={lr}, seed={seed})"
 
-            st.markdown(f"### Run {run_idx}/{total_runs}: **{run_key}**")
+                st.markdown(f"### Run {run_idx}/{total_runs}: **{run_key}**")
 
-            status_text = st.empty()
-            progress_bar = st.progress(0)
+                status_text = st.empty()
+                progress_bar = st.progress(0)
 
-            chart_col1, chart_col2 = st.columns(2)
-            with chart_col1:
-                st.caption("Loss")
-                loss_chart = st.empty()
-            with chart_col2:
-                metric_name_label = "Accuracy" if meta["task"] == "classification" else "R²"
-                st.caption(metric_name_label)
-                metric_chart = st.empty()
+                chart_col1, chart_col2 = st.columns(2)
+                with chart_col1:
+                    st.caption("Loss")
+                    loss_chart = st.empty()
+                with chart_col2:
+                    metric_name_label = "Accuracy" if meta["task"] == "classification" else "R²"
+                    st.caption(metric_name_label)
+                    metric_chart = st.empty()
 
-            set_seed(seed)
-            model = build_model(preset["model"], meta).to(device)
-            optimizer = build_optimizer(opt_name, model.parameters(), {"lr": lr})
+                set_seed(seed)
+                model = build_model(preset["model"], meta).to(device)
+                optimizer = build_optimizer(opt_name, model.parameters(), {"lr": lr})
 
-            run_cfg = {
-                "epochs": epochs,
-                "device": device,
-                "optimizer_name": opt_name,
-                "lr": lr,
-                "seed": seed,
-                "threshold": {
-                    "metric": preset["threshold_metric"],
-                    "value": preset["threshold_value"],
-                },
-            }
-
-            try:
-                summary, epoch_data = train_model_with_progress(
-                    model, train_loader, test_loader, optimizer,
-                    run_cfg, meta, progress_bar, status_text,
-                    loss_chart=loss_chart, metric_chart=metric_chart,
-                    scheduler_cfg=scheduler_cfg,
-                    early_stopping_cfg=early_stopping_cfg,
-                )
-
-                if summary is None:
-                    st.warning(f"⏹️ {run_key} — stopped early.")
-                    continue
-
-                all_results.append(summary)
-                all_curves[run_key] = epoch_data
-
-                # Save model for prediction page
-                model_save_dir = os.path.join("runs", preset["experiment"], "models")
-                os.makedirs(model_save_dir, exist_ok=True)
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                model_path = os.path.join(model_save_dir, f"{opt_name}_lr{lr}_seed{seed}_{timestamp}.pt")
-                torch.save({
-                    "model_state_dict": model.state_dict(),
-                    "model_name": preset["model"],
-                    "dataset": preset["dataset"],
-                    "optimizer": opt_name,
+                run_cfg = {
+                    "epochs": epochs,
+                    "device": device,
+                    "optimizer_name": opt_name,
                     "lr": lr,
                     "seed": seed,
-                    "meta": meta,
-                    "summary": summary,
-                }, model_path)
+                    "threshold": {
+                        "metric": preset["threshold_metric"],
+                        "value": preset["threshold_value"],
+                    },
+                }
 
-                metric_name = "Accuracy" if meta["task"] == "classification" else "R²"
-                st.success(
-                    f"✅ {run_key} — "
-                    f"Best {metric_name}: {summary['best_test_metric']:.4f} | "
-                    f"Time: {summary['total_time_s']:.1f}s | "
-                    f"State: {summary['optimizer_state_bytes'] / 1024:.0f} KB"
-                )
+                try:
+                    summary, epoch_data = train_model_with_progress(
+                        model, train_loader, test_loader, optimizer,
+                        run_cfg, meta, progress_bar, status_text,
+                        loss_chart=loss_chart, metric_chart=metric_chart,
+                        scheduler_cfg=scheduler_cfg,
+                        early_stopping_cfg=early_stopping_cfg,
+                    )
 
-            except Exception as e:
-                st.error(f"❌ {run_key} failed: {e}")
-                import traceback
-                st.code(traceback.format_exc())
+                    if summary is None:
+                        st.warning(f"⏹️ {run_key} — stopped early.")
+                        continue
 
-            overall_progress.progress(run_idx / total_runs)
+                    all_results.append(summary)
+                    all_curves[run_key] = epoch_data
 
-        # Check stop flag in outer loop too
+                    model_save_dir = os.path.join("runs", preset["experiment"], "models")
+                    os.makedirs(model_save_dir, exist_ok=True)
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    metric_tag = "acc" if meta["task"] == "classification" else "r2"
+                    metric_val = summary["best_test_metric"]
+                    model_fname = f"{opt_name}_lr{lr}_seed{seed}_ep{epochs}_{metric_tag}{metric_val:.4f}_{timestamp}.pt"
+                    model_path = os.path.join(model_save_dir, model_fname)
+                    torch.save({
+                        "model_state_dict": model.state_dict(),
+                        "model_name": preset["model"],
+                        "dataset": preset["dataset"],
+                        "optimizer": opt_name,
+                        "lr": lr,
+                        "seed": seed,
+                        "epochs": epochs,
+                        "meta": meta,
+                        "summary": summary,
+                    }, model_path)
+
+                    metric_name = "Accuracy" if meta["task"] == "classification" else "R²"
+                    st.success(
+                        f"✅ {run_key} — "
+                        f"Best {metric_name}: {summary['best_test_metric']:.4f} | "
+                        f"Time: {summary['total_time_s']:.1f}s | "
+                        f"State: {summary['optimizer_state_bytes'] / 1024:.0f} KB"
+                    )
+
+                except Exception as e:
+                    st.error(f"❌ {run_key} failed: {e}")
+                    import traceback
+                    st.code(traceback.format_exc())
+
+                overall_progress.progress(run_idx / total_runs)
+
+            if st.session_state.get("stop_training", False):
+                break
         if st.session_state.get("stop_training", False):
             break
 
@@ -802,9 +818,12 @@ def render():
 
         # Save per-run curves and detailed metrics JSON
         for run_key, curves in all_curves.items():
-            opt = run_key.split(" ")[0]
-            lr = run_key.split("lr=")[1].rstrip(")")
-            run_id = f"{opt}_lr{lr}_seed{seed}"
+            import re as _re
+            m = _re.match(r"(.+?) \(lr=(.+?), seed=(\d+)\)", run_key)
+            if m:
+                run_id = f"{m.group(1)}_lr{m.group(2)}_seed{m.group(3)}"
+            else:
+                run_id = run_key.replace(" ", "_")
             run_dir = os.path.join(experiment_dir, run_id)
             os.makedirs(run_dir, exist_ok=True)
 
@@ -833,16 +852,29 @@ def render():
     st.markdown("---")
     st.header("📊 Results")
 
+    # Best model recommendation
+    metric_name = "Accuracy" if meta["task"] == "classification" else "R²"
+    best = max(all_results, key=lambda r: r["best_test_metric"])
+    best_fname = f"{best['optimizer']}_lr{best['lr']}_seed{best['seed']}_ep{epochs}_{('acc' if meta['task'] == 'classification' else 'r2')}{best['best_test_metric']:.4f}"
+    st.success(
+        f"**Recommended Model:** `{best_fname}`\n\n"
+        f"Optimizer: **{best['optimizer']}** | LR: **{best['lr']}** | "
+        f"Seed: **{best['seed']}** | Epochs: **{epochs}** | "
+        f"Best {metric_name}: **{best['best_test_metric']:.4f}** | "
+        f"Time: {best['total_time_s']:.1f}s"
+    )
+
     # Summary table
     st.subheader("Summary Table")
     results_df = pd.DataFrame(all_results)
     display_cols = [
-        "optimizer", "lr", "best_test_metric", "total_time_s",
+        "optimizer", "lr", "seed", "best_test_metric", "total_time_s",
         "optimizer_state_bytes", "steps_to_threshold", "peak_gpu_mb",
     ]
     display_df = results_df[display_cols].copy()
     display_df["state_KB"] = (display_df["optimizer_state_bytes"] / 1024).round(0)
     display_df = display_df.drop(columns=["optimizer_state_bytes"])
+    display_df = display_df.sort_values("best_test_metric", ascending=False)
     st.dataframe(display_df, use_container_width=True)
 
     csv_data = results_df.to_csv(index=False)
@@ -903,7 +935,7 @@ def render():
                 title, fig = figs[i + j]
                 with col:
                     st.markdown(f"**{title}**")
-                    st.pyplot(fig)
+                    st.pyplot(fig, use_container_width=True)
                     plt.close(fig)
 
     st.success("🎉 Benchmark complete! Head to **🔮 Try the Model** to test predictions.")

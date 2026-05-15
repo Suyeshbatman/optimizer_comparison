@@ -2,7 +2,7 @@
 experiment: mnist_cnn
 dataset: mnist
 model: small_cnn
-epochs: 5
+epochs: 15
 batch_size: 128
 seeds: [42, 43, 44]
 
