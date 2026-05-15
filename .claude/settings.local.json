@@ -1,7 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(python -c \"from streamlit_folium import st_folium; print\\('folium OK'\\)\")"
-    ]
-  }
-}
